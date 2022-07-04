@@ -18,34 +18,6 @@ class GraphQLStreamReader {
     this.parse(response)
   }
 
-  private static getBoundary(value: string): string {
-    const boundary = value.split('boundary=')[1]
-    if (boundary) {
-      return boundary.replace(/^('|")/, '').replace(/('|")$/, '')
-    }
-
-    return '-'
-  }
-
-  private static getHeaders(value: string): Record<string, string> {
-    const headers: Record<string, string> = {}
-
-    value.split(';').forEach((line) => {
-      const i = line.indexOf(':')
-
-      if (i > -1) {
-        const name = line.slice(0, i).toLowerCase().trim()
-        const text = line
-          .slice(i + 1)
-          .toLowerCase()
-          .trim()
-        headers[name] = text
-      }
-    })
-
-    return headers
-  }
-
   private async parse(response: any): Promise<ReadableStream> {
     const reader = response.body.getReader()
     const $this = this
@@ -57,7 +29,7 @@ class GraphQLStreamReader {
           const iteration = await reader.read()
           if (iteration.done) {
             controller.close()
-            $this.emit('close')
+            $this.emit('close', $this.contents?.data)
             return
           }
 
@@ -75,7 +47,7 @@ class GraphQLStreamReader {
               const headers = GraphQLStreamReader.getHeaders(message.slice(0, index))
 
               if (headers['content-type'] !== 'application/json') {
-                throw new Error(`invalid chunk due to unexpected content-type ${headers['content-type']}.`)
+                throw new Error(`Unexpected content-type '${headers['content-type']}' received from chunk.`)
               }
 
               const body = message.slice(index)
@@ -110,6 +82,34 @@ class GraphQLStreamReader {
     return stream
   }
 
+  private static getBoundary(value: string): string {
+    const boundary = value.split('boundary=')[1]
+    if (boundary) {
+      return boundary.replace(/^('|")/, '').replace(/('|")$/, '')
+    }
+
+    return '-'
+  }
+
+  private static getHeaders(value: string): Record<string, string> {
+    const headers: Record<string, string> = {}
+
+    value.split(';').forEach((line) => {
+      const i = line.indexOf(':')
+
+      if (i > -1) {
+        const name = line.slice(0, i).toLowerCase().trim()
+        const text = line
+          .slice(i + 1)
+          .toLowerCase()
+          .trim()
+        headers[name] = text
+      }
+    })
+
+    return headers
+  }
+
   private static merge(payload: GraphQLPayload, value: Record<string, any>, path: (string | number)[]): void {
     while (path.length > 1) {
       const shifted = path.shift()
@@ -134,7 +134,8 @@ class GraphQLStreamReader {
   private emit(event: MultiPartStreamReaderEvent, ...args: any[]): void {
     const callbacks = this.callbacks[event]
     if (callbacks) {
-      callbacks.forEach((callback) => callback(...args))
+      const nextTick = typeof setImmediate === 'function' ? setImmediate : process.nextTick
+      callbacks.forEach((callback) => nextTick(callback, ...args))
     }
   }
 

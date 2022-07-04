@@ -25,5 +25,5 @@ export type GraphQLStreamOptions<T> = {
   next?(data: T): void
   chunk?(chunk: any): void
   error?(error: GraphQLError): void
-  complete?(): void
+  complete?(data: T): void
 }
