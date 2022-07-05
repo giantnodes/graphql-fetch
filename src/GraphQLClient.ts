@@ -37,26 +37,44 @@ class GraphQLClient {
     const response = await this.post(query, variables)
 
     const { headers } = response
-    if (!/^multipart\/mixed/.test(headers?.get('content-type') ?? '')) {
-      throw new Error(`Unexpected content-type '${headers?.get('content-type')}' received from response.`)
+    const type = headers?.get('content-type')?.toLowerCase()
+
+    if (type?.startsWith('application/json')) {
+      const payload = (await response.json()) as GraphQLPayload
+
+      if (options?.next) {
+        options.next(payload.data)
+      }
+
+      if (options?.complete) {
+        options.complete(payload.data)
+      }
+
+      return
     }
 
-    const reader = new GraphQLStreamReader(response)
-    if (options?.next) {
-      reader.on('data', options.next)
+    if (/^multipart\/mixed/.test(type ?? '')) {
+      const reader = new GraphQLStreamReader(response)
+      if (options?.next) {
+        reader.on('data', options.next)
+      }
+
+      if (options?.chunk) {
+        reader.on('chunk', options.chunk)
+      }
+
+      if (options?.error) {
+        reader.on('error', options.error)
+      }
+
+      if (options?.complete) {
+        reader.on('close', options.complete)
+      }
+
+      return
     }
 
-    if (options?.chunk) {
-      reader.on('chunk', options.chunk)
-    }
-
-    if (options?.error) {
-      reader.on('error', options.error)
-    }
-
-    if (options?.complete) {
-      reader.on('close', options.complete)
-    }
+    throw new Error(`Unexpected content-type '${type}' received from response.`)
   }
 
   private async post(document: DocumentNode | string, variables?: GraphQLVariables): Promise<Response> {
