@@ -21,12 +21,14 @@ class GraphQLClient {
     const response = await this.post(query, variables)
 
     const { headers } = response
-    if (headers?.get('content-type')?.toLowerCase().startsWith('application/json')) {
-      const payload = (await response.json()) as GraphQLPayload
-      return payload.data
+    const type = headers?.get('content-type')?.toLowerCase()
+
+    if (type?.startsWith('application/json') === false) {
+      throw new Error(`A unexpected content-type '${headers?.get('content-type')}' received from response.`)
     }
 
-    throw new Error(`Unexpected content-type '${headers?.get('content-type')}' received from response.`)
+    const payload = (await response.json()) as GraphQLPayload
+    return payload.data
   }
 
   async stream<TData = any, TVariables = GraphQLVariables>(
@@ -38,6 +40,10 @@ class GraphQLClient {
 
     const { headers } = response
     const type = headers?.get('content-type')?.toLowerCase()
+
+    if (type?.startsWith('application/json') === false && /^multipart\/mixed/.test(type ?? '') === false) {
+      throw new Error(`A unexpected content-type '${type}' received from response.`)
+    }
 
     if (type?.startsWith('application/json')) {
       const payload = (await response.json()) as GraphQLPayload
@@ -53,28 +59,22 @@ class GraphQLClient {
       return
     }
 
-    if (/^multipart\/mixed/.test(type ?? '')) {
-      const reader = new GraphQLStreamReader(response)
-      if (options?.next) {
-        reader.on('data', options.next)
-      }
-
-      if (options?.chunk) {
-        reader.on('chunk', options.chunk)
-      }
-
-      if (options?.error) {
-        reader.on('error', options.error)
-      }
-
-      if (options?.complete) {
-        reader.on('close', options.complete)
-      }
-
-      return
+    const reader = new GraphQLStreamReader(response)
+    if (options?.next) {
+      reader.on('data', options.next)
     }
 
-    throw new Error(`Unexpected content-type '${type}' received from response.`)
+    if (options?.chunk) {
+      reader.on('chunk', options.chunk)
+    }
+
+    if (options?.error) {
+      reader.on('error', options.error)
+    }
+
+    if (options?.complete) {
+      reader.on('close', options.complete)
+    }
   }
 
   private async post(document: DocumentNode | string, variables?: GraphQLVariables): Promise<Response> {
