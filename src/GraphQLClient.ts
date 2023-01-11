@@ -23,7 +23,10 @@ class GraphQLClient {
     const { headers } = response
     const type = headers?.get('content-type')?.toLowerCase()
 
-    if (type?.startsWith('application/json') === false) {
+    if (
+      type?.startsWith('application/json') === false &&
+      type?.startsWith('application/graphql-response+json') === false
+    ) {
       throw new Error(`A unexpected content-type '${headers?.get('content-type')}' received from response.`)
     }
 
@@ -41,11 +44,15 @@ class GraphQLClient {
     const { headers } = response
     const type = headers?.get('content-type')?.toLowerCase()
 
-    if (type?.startsWith('application/json') === false && /^multipart\/mixed/.test(type ?? '') === false) {
+    if (
+      type?.startsWith('application/json') === false &&
+      type?.startsWith('application/graphql-response+json') === false &&
+      /^multipart\/mixed/.test(type ?? '') === false
+    ) {
       throw new Error(`A unexpected content-type '${type}' received from response.`)
     }
 
-    if (type?.startsWith('application/json')) {
+    if (type?.startsWith('application/json') || type?.startsWith('application/graphql-response+json')) {
       const payload = (await response.json()) as GraphQLPayload
 
       if (options?.next) {
